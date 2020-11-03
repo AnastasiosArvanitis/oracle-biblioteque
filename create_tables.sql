@@ -3,6 +3,8 @@ CREATE TABLE genres (
     libelle VARCHAR(80) NOT NULL
 );
 
+select * from genres;
+
 CREATE TABLE ouvrages (
     isbn NUMBER(10) CONSTRAINT pk_ouvrages PRIMARY KEY,
     titre VARCHAR2(200) NOT NULL,
@@ -11,6 +13,8 @@ CREATE TABLE ouvrages (
     CONSTRAINT fk_ouvrages_genres REFERENCES genres(code),
     editeur VARCHAR2(80)
 );
+
+select * from ouvrages;
 
 CREATE TABLE exemplaires (
     isbn NUMBER(10),
@@ -22,6 +26,8 @@ CREATE TABLE exemplaires (
     CONSTRAINT ck_exemplaires_etat CHECK
         (etat in ('NE', 'BO', 'MO', 'MA'))
 );
+
+select * from exemplaires;
  
 CREATE TABLE membres (
     numero NUMBER(6) CONSTRAINT pk_membres PRIMARY KEY,
@@ -34,12 +40,16 @@ CREATE TABLE membres (
     CONSTRAINT ck_membres_duree CHECK (duree >= 0)
 );
 
+select * from membres;
+
 CREATE TABLE emprunts (
     numero NUMBER(10) CONSTRAINT pk_emprunts PRIMARY KEY,
     membre NUMBER(6) CONSTRAINT fk_emprunts_membres
         REFERENCES membres(numero),
     creele DATE DEFAULT SYSDATE
 );
+
+select * from emprunts;
 
 CREATE TABLE detailsemprunts (
     emprunt NUMBER(10) CONSTRAINT fk_details_emprunts 
@@ -52,6 +62,8 @@ CREATE TABLE detailsemprunts (
     CONSTRAINT fk_detailsemprunts_exemplaire
         FOREIGN KEY(isbn, exemplaire) REFERENCES exemplaires(isbn, numero)
 );
+
+select * from details;
 
 CREATE SEQUENCE seq_membre START WITH 1 INCREMENT BY 1;
 
@@ -81,7 +93,7 @@ CREATE SYNONYM abonnes FOR membres;
 
 RENAME detailsemprunts TO details;
 
-
+COMMIT;
 
 
 
