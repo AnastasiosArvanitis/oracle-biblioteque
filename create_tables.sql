@@ -52,3 +52,56 @@ CREATE TABLE detailsemprunts (
     CONSTRAINT fk_detailsemprunts_exemplaire
         FOREIGN KEY(isbn, exemplaire) REFERENCES exemplaires(isbn, numero)
 );
+
+CREATE SEQUENCE seq_membre START WITH 1 INCREMENT BY 1;
+
+ALTER TABLE membres 
+ADD CONSTRAINT uq_membres UNIQUE (nom, prenom, telephone);
+
+ALTER TABLE membres ADD mobile CHAR(10);
+ALTER TABLE membres ADD CONSTRAINT ck_membres_mobile
+CHECK (mobile LIKE '06%' OR mobile LIKE '07%');
+
+CREATE INDEX idx_ouvrages_genre ON ouvrages(genre); 
+CREATE INDEX idx_emplaires_isbn ON exemplaires(isbn); 
+CREATE INDEX idx_emprunts_membre ON emprunts(membre); 
+CREATE INDEX idx_details_emprunt ON detailsemprunts(emprunt); 
+CREATE INDEX idx_details_exemplaire ON detailsemprunts(isbn, exemplaire);
+
+ALTER TABLE detailsemprunts DROP CONSTRAINT fk_details_emprunts;
+
+ALTER TABLE detailsemprunts ADD CONSTRAINT
+fk_details_emprunts FOREIGN KEY(emprunt)
+REFERENCES emprunts(numero) ON DELETE CASCADE;
+
+ALTER TABLE exemplaires MODIFY (
+etat CHAR(2) DEFAULT 'NE');
+
+CREATE SYNONYM abonnes FOR membres;
+
+RENAME detailsemprunts TO details;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
