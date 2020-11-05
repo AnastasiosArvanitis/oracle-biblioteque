@@ -61,7 +61,7 @@ COMMIT;
 --DROP TABLE tempoExemplaires
 
 --Établissez la liste des membres qui ont emprunté un ouvrage depuis 
---strictement plus de deux semaines en indiquant le nom de l’ouvrage.
+--strictement plus de deux semaines en indiquant le nom de l'ouvrage.
 
 SELECT m.*, o.titre, sysdate - creele as "Durée en jours"
 FROM membres m 
@@ -103,14 +103,14 @@ WHERE MONTHS_BETWEEN(em.creele, sysdate) < 12
 GROUP BY ex.isbn
 HAVING COUNT(*) > 2;
 
---Établissez la liste de tous les ouvrages avec à côté de chacun d’eux 
---les numéros d’exemplaires qui existent dans la base.
+--Établissez la liste de tous les ouvrages avec à côté de chacun d'eux 
+--les numéros d'exemplaires qui existent dans la base.
 SELECT ou.*, ex.numero
 FROM ouvrages ou 
 LEFT OUTER JOIN exemplaires ex ON ou.isbn = ex.isbn;
 
 --Définissez une vue qui permet de connaître pour chaque membre 
---le nombre d’ouvrages empruntés, et donc encore non rendus.
+--le nombre d'ouvrages empruntés, et donc encore non rendus.
 CREATE OR REPLACE VIEW ouvragesEmpruntes AS
     SELECT em.membre, COUNT(*) AS "Nombre Emprunts"
     FROM emprunts em
@@ -120,7 +120,7 @@ CREATE OR REPLACE VIEW ouvragesEmpruntes AS
     
 SELECT * FROM ouvragesEmpruntes;
 
---Vue qui permet de connaître le nombre d’emprunts par ouvrage :
+--Vue qui permet de connaître le nombre d'emprunts par ouvrage :
 CREATE OR REPLACE VIEW NombreEmpruntsParOuvrage AS
 SELECT isbn, COUNT(*) AS "Nombre Emprunts"
 FROM details
@@ -161,7 +161,7 @@ FROM ouvrages ou
 INNER JOIN genres g ON ou.genre = g.code
 ORDER BY 1, 2;
 
---Établissez le nombre d’emprunts par ouvrage et par exemplaire.
+--Établissez le nombre d'emprunts par ouvrage et par exemplaire.
 SELECT isbn, exemplaire, COUNT(*) AS Nombre
 FROM details
 GROUP BY ROLLUP(isbn, exemplaire)
@@ -173,7 +173,7 @@ COUNT(*) AS nombre
 FROM details
 GROUP BY ROLLUP(isbn, exemplaire);
 
---Établissez la liste des exemplaires qui n’ont jamais été empruntés 
+--Établissez la liste des exemplaires qui n'ont jamais été empruntés 
 --au cours des trois derniers mois.
 SELECT *
 FROM exemplaires ex
@@ -185,7 +185,7 @@ WHERE NOT EXISTS(
         AND d.exemplaire = ex.numero);
 
 --Établissez la liste des ouvrages pour lesquels 
---il n’existe pas d’exemplaires à l’état neuf.
+--il n'existe pas d'exemplaires à l'état neuf.
 SELECT * FROM ouvrages
 WHERE isbn NOT IN (
     SELECT isbn
@@ -216,6 +216,192 @@ CASE genre
 END AS "Public"
 FROM ouvrages
 ORDER BY 3;
+
+COMMENT ON TABLE membres 
+IS 'Descriptifs des membres. Possède le synonyme Abonnes'; 
+COMMENT ON TABLE genres 
+IS 'Définition des genres possibles des ouvrages'; 
+COMMENT ON TABLE ouvrages 
+IS 'Description des ouvrages référencés par la bibliothèque'; 
+COMMENT ON TABLE exemplaires 
+IS 'Définition précise des livres présents dans la bibliothèque'; 
+COMMENT ON TABLE emprunts 
+IS 'Fiche d''emprunt de livres, toujours associée à un et un seul membre'; 
+COMMENT ON TABLE details 
+IS 'Chaque ligne correspond à un livre emprunté';
+
+SELECT ouvrages, comments 
+FROM USER_TAB_COMMENTS 
+WHERE comments is not null;
+
+--afficher un message en fonction du nombre 
+--d'exemplaires de chaque ouvrage
+select ou.isbn, ou.titre, 
+    CASE count(*)
+        when 0 then 'Aucun'
+        when 1 then 'Peu'
+        when 2 then 'Peu'
+        when 3 then 'Normal'
+        when 4 then 'Normal'
+        when 5 then 'Normal'
+        else 'Beaucoup'
+    end as "Nombre Exemplaires"
+from ouvrages ou 
+inner join exemplaires ex on  ou.isbn = ex.isbn
+group by ou.isbn, ou.titre
+order by 2 asc;
+
+--Tableau récapitulatif
+SELECT * FROM 
+(SELECT isbn, exemplaire, COUNT(*) AS qte  
+FROM details GROUP BY isbn, exemplaire) 
+PIVOT(SUM(qte) FOR exemplaire IN (1, 2));
+
+--UPDATE ETAT
+DECLARE
+nb int;
+cursor cLesExemplaires is 
+    select d.isbn, d.exemplaire, etat, count(*) as nbre
+    from details d
+    inner join exemplaires ex on d.isbn = ex.isbn
+            and d.numero = ex.numero
+            group by d.isbn, d.exemplaire, etat;
+Vetat exemplaire.etat%TYPE;
+
+BEGIN
+    for Vexemplaire in clesExemplaires
+        loop
+            if (Vexemplaire.nbre <= 10)
+                then vetat := 'NE';
+                else if (Vexemplaire.nbre <= 25)
+                    then vetat := 'BO';
+                    else if (Vexemplaire.nbre <= 40)
+                        then vetat := 'MO';
+                        else
+                            vetat := 'MA';
+                        end if;
+                    end if;
+                end if;
+        update exemplaires set etat = Vetat 
+        where isbn = Vexemplaire.isbn
+        and numero = Vexemplaire.exemplaire;
+    end loop;
+end;
+/
+
+--la liste des trois membres qui ont emprunté le plus d'ouvrages 
+--au cours des dix derniers mois et établissez également la liste 
+--des trois membres qui en ont emprunté le moins.
+SET SERVEROUTPUT ON
+
+DECLARE
+    CURSOR ccroissant IS 
+        SELECT e.membre, count(*) nb
+        from emprunts e 
+        inner join details d on e.numero = d.emprunt
+        where months_between(sysdate, creele) <= 10
+        group by e.membre
+        order by 2 asc;
+        
+    CURSOR cdecroissant IS
+        select membre, nb from
+            (select e.membre, count(*) NB
+            from emprunts e
+            inner join details d on e.numero = d.emprunt
+            where months_between(sysdate, creele) <= 10
+            group by e.membre
+            order by 2 desc) R
+            where rownum <= 3;
+            
+    vreception ccroissant%rowtype;
+    i number;
+    vmembre membre%rowtype;
+    
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('Les plus faibles emprunteurs');
+    OPEN ccroissant;
+    for i in 1..3 loop
+        fetch ccroissant into vreception;
+        if ccroissant%notfound
+            then exit;
+        end if;
+        select * into vmembre
+            from membres
+            where numero = vreception.membre;
+         dbms_output.put_line(i||') '||vmembre.numero||' '||vmembre.nom);
+         end loop;
+         close ccroissant;
+         dbms_output.put_line('Les gros emprunteurs');
+         --autre methode
+         for vrec in cdecroissant loop
+         select * into vmembre
+         from membres
+         where numero = vrec.membre;
+         dbms_output.put_line(cdecroissant%ROWCOUNT||')'||vmembre.numero||' '||vmembre.nom);
+         end loop;
+         end;
+         /
+    
+
+
+
+SET SERVEROUTPUT ON 
+ 
+DECLARE 
+  CURSOR ccroissant IS SELECT e.membre, COUNT(*) nb 
+    FROM emprunts e INNER JOIN details d ON e.numero=d.emprunt 
+        WHERE months_between(sysdate, creele)<=10 
+    GROUP BY e.membre 
+    ORDER BY 2 ASC; 
+CURSOR cdecroissant IS  
+SELECT membre,nb FROM  
+( SELECT e.membre, COUNT(*) NB 
+    FROM emprunts e INNER JOIN details d ON e.numero=d.emprunt 
+        WHERE months_between(sysdate, creele)<=10 
+    GROUP BY e.membre 
+    ORDER BY 2 DESC ) R 
+    WHERE rownum <= 3; 
+ 
+  vreception ccroissant%rowtype; 
+  i number; 
+  vmembre membres%rowtype; 
+BEGIN 
+  DBMS_OUTPUT.PUT_LINE('Les plus faibles emprunteurs'); 
+  OPEN ccroissant; 
+  FOR i IN 1..3 LOOP 
+    FETCH ccroissant INTO vreception; 
+    IF ccroissant%NOTFOUND  
+      THEN EXIT; 
+    END IF; 
+    SELECT * INTO vmembre  
+      FROM membres  
+      WHERE numero=vreception.membre; 
+    DBMS_OUTPUT.PUT_LINE(i||')  '||vmembre.numero||' '||vmembre.nom); 
+  END LOOP; 
+  CLOSE ccroissant; 
+  DBMS_OUTPUT.PUT_LINE('Les gros emprunteurs'); 
+-- autre methode 
+  FOR vrec IN cdecroissant LOOP 
+  SELECT * INTO vmembre  
+      FROM membres  
+      WHERE numero=vrec.membre; 
+    DBMS_OUTPUT.PUT_LINE(cdecroissant%ROWCOUNT||')  
+'||vmembre.numero||' '||vmembre.nom); 
+  END LOOP; 
+END;
+/
+
+
+
+--un bloc PL/SQL qui permet de connaître 
+--les cinq ouvrages les plus empruntés.
+
+
+
+
+
+
+
 
 
 
